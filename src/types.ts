@@ -48,7 +48,12 @@ export interface HBV {
 export interface Event {
   id: string;
   timestamp: string;
+  /** 原始币种金额。若 currency 省略则被视为基准币，fxRate 视为 1。 */
   amount: number;
+  /** ISO 4217 代码或加密货币代号（USD/EUR/BTC…）；省略 = 基准币 */
+  currency?: string;
+  /** 录入时锁定的快照汇率：1 单位 currency = fxRate 单位基准币。省略 = 1。 */
+  fxRate?: number;
   assetType: string;
   source: string;
   destination: string;
@@ -143,9 +148,19 @@ export interface MetaRecord {
   accountClass: AccountClass;
   riskTags: RiskTag[];
   totalLnVar: number;
+  /** 原始币种（审计用） */
+  currency?: string;
+  /** 原始币种金额 */
+  originalAmount?: number;
+  /** 入账时的快照汇率（1 原币 = fxRate 基准币） */
+  fxRate?: number;
+  /** 折算后的基准币等值金额 */
+  baseAmount?: number;
 }
 
 export interface LASAState {
+  /** 基准币种；所有账户余额以该币种计算 */
+  baseCurrency: string;
   assets: AssetState;
   liabilities: LiabilityState;
   income: IncomeState;

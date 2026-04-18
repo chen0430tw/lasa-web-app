@@ -180,6 +180,40 @@ export const routeDisputedReceipt: RuleFunc = (event) =>
 export const routeDefaultPending: RuleFunc = (event) =>
   makeResult(AccountClass.PENDING, risks(event), { dPendingSpeculative: 0 });
 
+// Internal transfer: account-to-account movement between the owner's own accounts
+// (e.g. bank A → bank B, 跨行轉入本人帳戶, 帳戶互轉). LASA's single "cash" layer treats
+// both endpoints as cash, so no account-level delta is produced.
+export const routeInternalTransfer: RuleFunc = (event) =>
+  makeResult(AccountClass.TRANSFER, risks(event), {});
+
+// Suspected internal transfer — counterparty unclear (could be self or third party).
+// Same zero-delta effect, tagged PENDING_REVIEW for user to reclassify.
+export const routeInternalTransferCandidate: RuleFunc = (event) =>
+  makeResult(AccountClass.PENDING, [RiskTag.PENDING_REVIEW, ...risks(event)], {});
+
+// ATM cash withdrawal / debit-card cash-out: bank balance → physical cash.
+// Different from INTERNAL_TRANSFER: the destination is cash-in-hand, not another account.
+// Both endpoints fold into LASA's single "cash" layer, so the delta is zero.
+export const routeCashWithdrawal: RuleFunc = (event) =>
+  makeResult(AccountClass.TRANSFER, risks(event), {});
+
+// E-wallet top-up: bank balance → e-wallet balance. Same-owner asset form change,
+// zero-delta under single cash layer.
+export const routeEwalletTopup: RuleFunc = (event) =>
+  makeResult(AccountClass.TRANSFER, risks(event), {});
+
+// E-wallet withdrawal (reverse of top-up): e-wallet balance → bank balance.
+export const routeEwalletWithdrawal: RuleFunc = (event) =>
+  makeResult(AccountClass.TRANSFER, risks(event), {});
+
+// Bank fee: genuine cash outflow for transfer/withdrawal/service/management charges.
+// NOT the principal withdrawal itself — that is CASH_WITHDRAWAL (zero-delta).
+export const routeBankFee: RuleFunc = (event) =>
+  makeResult(AccountClass.EXPENSE, risks(event), {
+    dCash: -event.amount,
+    dExpenseSystem: event.amount,
+  });
+
 export const RULE_REGISTRY: Record<string, RuleFunc> = {
   SALARY_IN: routeSalaryIn,
   LIVING_EXPENSE: routeLivingExpense,
@@ -216,6 +250,12 @@ export const RULE_REGISTRY: Record<string, RuleFunc> = {
   DEPOSIT_IN: routeDepositIn,
   DEPOSIT_RETURN: routeDepositReturn,
   DISPUTED_RECEIPT: routeDisputedReceipt,
+  INTERNAL_TRANSFER: routeInternalTransfer,
+  INTERNAL_TRANSFER_CANDIDATE: routeInternalTransferCandidate,
+  CASH_WITHDRAWAL: routeCashWithdrawal,
+  E_WALLET_TOPUP: routeEwalletTopup,
+  E_WALLET_WITHDRAWAL: routeEwalletWithdrawal,
+  BANK_FEE: routeBankFee,
 };
 
 export function semanticAdjustResult(event: Event, result: ClassificationResult, ctx: SemanticContext): ClassificationResult {

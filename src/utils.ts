@@ -44,8 +44,9 @@ export function lnVariance(values: number[], eps = 1e-9): number {
   return Math.log(variance(values) + eps);
 }
 
-export function makeLASAState(): LASAState {
+export function makeLASAState(baseCurrency: string = "TWD"): LASAState {
   return {
+    baseCurrency,
     assets: { cash: 0, financial: 0, tradeable: 0, other: 0 },
     liabilities: { shortTerm: 0, pending: 0 },
     income: { regular: 0, grant: 0, tradeRealized: 0, broker: 0, intangibleRealized: 0 },

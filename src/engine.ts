@@ -39,14 +39,32 @@ export function enrichWithPrototypeSimilarity(engine: LASAEngine, ctx: SemanticC
 }
 
 export function processEvent(event: Event, engine: LASAEngine): void {
-  const hv = encodeLHS(event);
-  updateWCN(engine.graph, event.id, hv.values);
-  const ctx = buildSemanticContext(event, engine.graph, engine.msn, engine.hbv);
+  // 折算为基准币：若事件币种 = 基准币或省略，则 fxRate 默认 1
+  // fxRate 必须 > 0；0 / NaN / undefined 均视为未知，降级为 1:1 防止静默入账 0
+  const originalAmount = event.amount;
+  const baseCcy = engine.state.baseCurrency;
+  const sameCcy = !event.currency || event.currency === baseCcy;
+  const rawRate = event.fxRate;
+  const fxRate = sameCcy ? 1 : (typeof rawRate === "number" && rawRate > 0 ? rawRate : 1);
+  const baseAmount = event.amount * fxRate;
+  const normalized: Event = { ...event, amount: baseAmount };
+
+  const hv = encodeLHS(normalized);
+  updateWCN(engine.graph, normalized.id, hv.values);
+  const ctx = buildSemanticContext(normalized, engine.graph, engine.msn, engine.hbv);
   enrichWithPrototypeSimilarity(engine, ctx);
-  const result = tryRuleRegistry(event, ctx) ?? fallbackSemanticClassifier(event, ctx);
-  applyClassification(engine.state, result, event.id, ctx.totalLnVar);
+  const result = tryRuleRegistry(normalized, ctx) ?? fallbackSemanticClassifier(normalized, ctx);
+  applyClassification(engine.state, result, normalized.id, ctx.totalLnVar);
+  // 补注原始币种审计信息
+  const lastMeta = engine.state.metaLog[engine.state.metaLog.length - 1];
+  if (lastMeta && lastMeta.eventId === normalized.id) {
+    lastMeta.currency = event.currency ?? baseCcy;
+    lastMeta.originalAmount = originalAmount;
+    lastMeta.fxRate = fxRate;
+    lastMeta.baseAmount = baseAmount;
+  }
   updatePrototype(engine, result.accountClass, ctx.lhsVector);
-  engine.semanticLog.set(event.id, ctx);
+  engine.semanticLog.set(normalized.id, ctx);
 }
 
 export function runLASA(engine: LASAEngine, events: Event[]): PeriodSummary {
